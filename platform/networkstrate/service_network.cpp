@@ -46,7 +46,7 @@ ServiceNetwork::ServiceNetwork(const ResDBConfig& config,
   acceptor_ = std::make_unique<Acceptor>(config, &input_queue_);
 
   async_acceptor_ = std::make_unique<AsyncAcceptor>(
-      config.GetSelfInfo().ip(), config_.GetSelfInfo().port() + 10000,
+      "0.0.0.0", config_.GetSelfInfo().port() + 10000,
       config.GetInputWorkerNum(),
       std::bind(&ServiceNetwork::AcceptorHandler, this, std::placeholders::_1,
                 std::placeholders::_2));

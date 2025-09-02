@@ -21,3 +21,7 @@ resdb/
 100*_db/
 gmon.out
 .history/
+INSTALL/bazel/bin/
+error.txt
+scripts/deploy/data/
+scripts/deploy/resilientdb_app/
