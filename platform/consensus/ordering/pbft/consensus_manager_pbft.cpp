@@ -203,7 +203,7 @@ int ConsensusManagerPBFT::InternalConsensusCommit(
       return response_manager_->ProcessResponseMsg(std::move(context),
                                                    std::move(request));
     case Request::TYPE_NEW_TXNS: {
-      LOG(INFO) << "TESTATATSTAETSETA";
+      LOG(ERROR) << "TESTATATSTAETSETA";
 
       uint64_t proxy_id = request->proxy_id();
       std::string hash = request->hash();

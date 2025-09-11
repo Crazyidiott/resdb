@@ -56,7 +56,7 @@ std::unique_ptr<std::string> KVExecutor::ExecuteRequest(
     //     // 将当前哈希结果作为下一次的输入
     //     input.assign(hash.begin(), hash.end());
     // }
-    LOG(ERROR)<<" execute cmd:"<<kv_request.cmd()<<" hash:"<<common::BytesToHexString(hash);
+    LOG(ERROR)<<" execute cmd:";
 
     Set(kv_request.key(), kv_request.value());
   } else if (kv_request.cmd() == KVRequest::GET) {
@@ -119,7 +119,7 @@ std::unique_ptr<std::string> KVExecutor::ExecuteData(
     //     // 将当前哈希结果作为下一次的输入
     //     input.assign(hash.begin(), hash.end());
     // }
-    LOG(ERROR)<<" execute cmd:"<<kv_request.cmd()<<" hash:"<<common::BytesToHexString(hash);
+    LOG(ERROR)<<" execute cmd:";
     Set(kv_request.key(), kv_request.value());
   } else if (kv_request.cmd() == KVRequest::GET) {
     kv_response.set_value(Get(kv_request.key()));
