@@ -19,7 +19,7 @@
 
 #include "executor/kv/kv_executor.h"
 #include "executor/contract/executor/contract_executor.h"
-
+#include <openssl/sha.h>
 #include <glog/logging.h>
 
 namespace resdb {
@@ -45,6 +45,17 @@ std::unique_ptr<std::string> KVExecutor::ExecuteRequest(
   const KVRequest& kv_request = dynamic_cast<const KVRequest&>(request);
 
   if (kv_request.cmd() == KVRequest::SET) {
+    std::string input = "Hello, World!";
+    std::vector<unsigned char> hash(SHA256_DIGEST_LENGTH);
+    
+    for (int i = 0; i < 10000; i++) {
+        SHA256(reinterpret_cast<const unsigned char*>(input.data()),
+               input.size(),
+               hash.data());
+        
+        // 将当前哈希结果作为下一次的输入
+        input.assign(hash.begin(), hash.end());
+    }
     Set(kv_request.key(), kv_request.value());
   } else if (kv_request.cmd() == KVRequest::GET) {
     kv_response.set_value(Get(kv_request.key()));
@@ -96,6 +107,8 @@ std::unique_ptr<std::string> KVExecutor::ExecuteData(
 
   LOG(ERROR)<<" execute cmd:"<<kv_request.cmd();
   if (kv_request.cmd() == KVRequest::SET) {
+    // test comput
+    
     Set(kv_request.key(), kv_request.value());
   } else if (kv_request.cmd() == KVRequest::GET) {
     kv_response.set_value(Get(kv_request.key()));
