@@ -19,7 +19,7 @@
 
 #include "executor/kv/kv_executor.h"
 #include "executor/contract/executor/contract_executor.h"
-#include <openssl/sha.h>
+// #include <openssl/sha.h>
 #include <glog/logging.h>
 
 namespace resdb {
