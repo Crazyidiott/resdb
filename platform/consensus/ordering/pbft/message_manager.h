@@ -112,9 +112,7 @@ class MessageManager {
 
   LockFreeCollectorPool* GetCollectorPool();
 
-  void SetExecutionCallback(std::function<void(uint64_t)> callback) {
-    execution_callback_ = callback;
-  }
+  void SetExecutionCallback(std::function<void(uint64_t)> callback);
 
  private:
   bool IsValidMsg(const Request& request);
