@@ -21,14 +21,43 @@
 #include "executor/contract/executor/contract_executor.h"
 #include <glog/logging.h>
 
-// for hash
-#include <cryptopp/sha.h>
-#include <cryptopp/filters.h>
-#include <cryptopp/hex.h>
-#include <cryptopp/cryptlib.h>
-#include <cryptopp/secblock.h>
+#include <vector>
+#include <random>
 
 namespace resdb {
+
+// for matrix operations
+using Matrix = std::vector<std::vector<double>>;
+// 随机生成矩阵
+Matrix randomMatrix(int rows, int cols) {
+    static std::mt19937 rng(std::random_device{}());
+    static std::uniform_real_distribution<double> dist(0.0, 1.0);
+
+    Matrix mat(rows, std::vector<double>(cols));
+    for (int i = 0; i < rows; ++i)
+        for (int j = 0; j < cols; ++j)
+            mat[i][j] = dist(rng);
+    return mat;
+}
+
+// 手动实现矩阵乘法
+Matrix multiplyMatrix(const Matrix &A, const Matrix &B) {
+    int rows = A.size();
+    int cols = B[0].size();
+    int inner = B.size();
+    
+    Matrix C(rows, std::vector<double>(cols, 0.0));
+    
+    for (int i = 0; i < rows; ++i) {
+        for (int k = 0; k < inner; ++k) {
+            for (int j = 0; j < cols; ++j) {
+                C[i][j] += A[i][k] * B[k][j];
+            }
+        }
+    }
+    
+    return C;
+}
 
 KVExecutor::KVExecutor(std::unique_ptr<Storage> storage)
     : storage_(std::move(storage)) {
@@ -51,14 +80,10 @@ std::unique_ptr<std::string> KVExecutor::ExecuteRequest(
   const KVRequest& kv_request = dynamic_cast<const KVRequest&>(request);
 
   if (kv_request.cmd() == KVRequest::SET) {
-    using namespace CryptoPP;
-    SHA256 hash;
-    SecByteBlock digest(hash.DigestSize());
-    const std::string msg = "test";
-    for (int i = 0; i < 1000; ++i) {
-        hash.Update(reinterpret_cast<const byte*>(msg.data()), msg.size());
-        hash.Final(digest);        // 计算一次
-        hash.Restart();            // 重置以便下一次
+    for (int t = 0; t < 1000; ++t) {
+        Matrix A = randomMatrix(100, 100);
+        Matrix B = randomMatrix(100, 100); // 保证可乘
+        Matrix C = multiplyMatrix(A, B);
     }
     Set(kv_request.key(), kv_request.value());
   } else if (kv_request.cmd() == KVRequest::GET) {
@@ -110,15 +135,11 @@ std::unique_ptr<std::string> KVExecutor::ExecuteData(
   }
 
   if (kv_request.cmd() == KVRequest::SET) {   
-    using namespace CryptoPP;
-    SHA256 hash;
-    SecByteBlock digest(hash.DigestSize());
-    const std::string msg = "test";
-    for (int i = 0; i < 1000; ++i) {
-        hash.Update(reinterpret_cast<const byte*>(msg.data()), msg.size());
-        hash.Final(digest);        // 计算一次
-        hash.Restart();            // 重置以便下一次
-    } 
+    for (int t = 0; t < 1000; ++t) {
+        Matrix A = randomMatrix(100, 100);
+        Matrix B = randomMatrix(100, 100); // 保证可乘
+        Matrix C = multiplyMatrix(A, B);
+    }
     Set(kv_request.key(), kv_request.value());
   } else if (kv_request.cmd() == KVRequest::GET) {
     kv_response.set_value(Get(kv_request.key()));
