@@ -65,9 +65,9 @@ ConsensusManagerPBFT::ConsensusManagerPBFT(
 
   // 添加：从配置中读取pipeline大小（如果配置支持的话）
   // 如果配置不支持，使用默认值100
-  if (config_.GetConfigData().has_max_pipeline_size()) {
-    max_pipeline_size_ = config_.GetConfigData().max_pipeline_size();
-  }
+  // if (config_.GetConfigData().has_max_pipeline_size()) {
+  //   max_pipeline_size_ = config_.GetConfigData().max_pipeline_size();
+  // }
   
   // 设置执行完成的回调
   message_manager_->SetExecutionCallback(
