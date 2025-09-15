@@ -21,6 +21,13 @@
 #include "executor/contract/executor/contract_executor.h"
 #include <glog/logging.h>
 
+// for hash
+#include <cryptopp/sha.h>
+#include <cryptopp/filters.h>
+#include <cryptopp/hex.h>
+#include <cryptopp/cryptlib.h>
+#include <cryptopp/secblock.h>
+
 namespace resdb {
 
 KVExecutor::KVExecutor(std::unique_ptr<Storage> storage)
@@ -44,6 +51,15 @@ std::unique_ptr<std::string> KVExecutor::ExecuteRequest(
   const KVRequest& kv_request = dynamic_cast<const KVRequest&>(request);
 
   if (kv_request.cmd() == KVRequest::SET) {
+    using namespace CryptoPP;
+    SHA256 hash;
+    SecByteBlock digest(hash.DigestSize());
+    const std::string msg = "test";
+    for (int i = 0; i < 1000; ++i) {
+        hash.Update(reinterpret_cast<const byte*>(msg.data()), msg.size());
+        hash.Final(digest);        // 计算一次
+        hash.Restart();            // 重置以便下一次
+    }
     Set(kv_request.key(), kv_request.value());
   } else if (kv_request.cmd() == KVRequest::GET) {
     kv_response.set_value(Get(kv_request.key()));
@@ -93,7 +109,16 @@ std::unique_ptr<std::string> KVExecutor::ExecuteData(
     return nullptr;
   }
 
-  if (kv_request.cmd() == KVRequest::SET) {    
+  if (kv_request.cmd() == KVRequest::SET) {   
+    using namespace CryptoPP;
+    SHA256 hash;
+    SecByteBlock digest(hash.DigestSize());
+    const std::string msg = "test";
+    for (int i = 0; i < 1000; ++i) {
+        hash.Update(reinterpret_cast<const byte*>(msg.data()), msg.size());
+        hash.Final(digest);        // 计算一次
+        hash.Restart();            // 重置以便下一次
+    } 
     Set(kv_request.key(), kv_request.value());
   } else if (kv_request.cmd() == KVRequest::GET) {
     kv_response.set_value(Get(kv_request.key()));
