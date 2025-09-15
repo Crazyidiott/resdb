@@ -86,7 +86,7 @@ class ConsensusManagerPBFT : public ConsensusManager {
   std::queue<std::pair<std::unique_ptr<Context>, std::unique_ptr<Request>>>
       request_complained_;
   std::mutex mutex_;
-};
+
 
 private:
   // Pipeline控制相关成员变量
@@ -105,4 +105,5 @@ private:
   void MoveWaitingToPending();
   bool IsPrimary() const;
 
+  };
 }  // namespace resdb
