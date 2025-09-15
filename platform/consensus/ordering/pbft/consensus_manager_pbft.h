@@ -54,6 +54,9 @@ class ConsensusManagerPBFT : public ConsensusManager {
 
   void SetPreVerifyFunc(std::function<bool(const Request&)>);
   void SetNeedCommitQC(bool need_qc);
+  
+  // Pipeline控制相关方法
+  void SetMaxPipelineSize(int size) { max_pipeline_size_ = size; }
 
  protected:
   int InternalConsensusCommit(std::unique_ptr<Context> context,
@@ -84,5 +87,22 @@ class ConsensusManagerPBFT : public ConsensusManager {
       request_complained_;
   std::mutex mutex_;
 };
+
+private:
+  // Pipeline控制相关成员变量
+  std::queue<std::pair<std::unique_ptr<Context>, std::unique_ptr<Request>>> 
+      waiting_queue_;                    // 等待处理的请求队列
+  std::atomic<int> processing_count_{0}; // 当前正在处理的请求数
+  int max_pipeline_size_{100};          // 最大并发处理数，默认100
+  std::mutex pipeline_mutex_;           // 保护waiting_queue的互斥锁
+  
+  // Pipeline控制相关方法
+  bool CanProcessNewRequest();
+  void AddToWaitingQueue(std::unique_ptr<Context> context, 
+                        std::unique_ptr<Request> request);
+  void TryProcessFromWaitingQueue();
+  void OnRequestExecuted(uint64_t seq);
+  void MoveWaitingToPending();
+  bool IsPrimary() const;
 
 }  // namespace resdb

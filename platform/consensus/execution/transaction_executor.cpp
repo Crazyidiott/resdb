@@ -315,6 +315,11 @@ void TransactionExecutor::Execute(std::unique_ptr<Request> request,
 	    }
       FinishExecute(request->seq());
 
+      // 调用回调通知执行完成
+      if (execution_callback_) {
+        execution_callback_(request->seq());
+      }
+
       if(response == nullptr){
 	      response = std::make_unique<BatchUserResponse>();
 	      for (auto& s : response_v) {

@@ -290,4 +290,8 @@ LockFreeCollectorPool* MessageManager::GetCollectorPool() {
   return collector_pool_.get();
 }
 
+void MessageManager::SetExecutionCallback(std::function<void(uint64_t)> callback) {
+  transaction_executor_->SetExecutionCallback(std::move(callback));
+}
+
 }  // namespace resdb

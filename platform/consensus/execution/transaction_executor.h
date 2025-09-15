@@ -72,6 +72,10 @@ class TransactionExecutor {
 
   void Prepare(std::unique_ptr<Request> request);
 
+  void SetExecutionCallback(std::function<void(uint64_t)> callback) {
+    execution_callback_ = std::move(callback);
+  }
+
  private:
   void Execute(std::unique_ptr<Request> request, bool need_execute = true);
   void OnlyExecute(std::unique_ptr<Request> request);
@@ -95,6 +99,8 @@ class TransactionExecutor {
   bool AddFuture(uint64_t uid);
   std::unique_ptr<std::future<int>> GetFuture(uint64_t uid);
   std::promise<int>* GetPromise(uint64_t uid);
+
+  std::function<void(uint64_t)> execution_callback_;
 
  protected:
   ResDBConfig config_;

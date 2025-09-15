@@ -63,6 +63,16 @@ ConsensusManagerPBFT::ConsensusManagerPBFT(
 
   view_change_manager_->SetDuplicateManager(commitment_->GetDuplicateManager());
 
+  // 添加：从配置中读取pipeline大小（如果配置支持的话）
+  // 如果配置不支持，使用默认值100
+  if (config_.GetConfigData().has_max_pipeline_size()) {
+    max_pipeline_size_ = config_.GetConfigData().max_pipeline_size();
+  }
+  
+  // 设置执行完成的回调
+  message_manager_->SetExecutionCallback(
+      [this](uint64_t seq) { this->OnRequestExecuted(seq); });
+
   recovery_->ReadLogs(
       [&](const SystemInfoData& data) {
         system_info_->SetCurrentView(data.view());
@@ -147,6 +157,9 @@ int ConsensusManagerPBFT::ConsensusCommit(std::unique_ptr<Context> context,
   if (config_.GetConfigData().enable_viewchange()) {
     view_change_manager_->MayStart();
     if (view_change_manager_->IsInViewChange()) {
+      // 添加：视图变更时，将waiting_queue移到pending_queue
+      MoveWaitingToPending();
+
       switch (request->type()) {
         case Request::TYPE_NEW_TXNS:
         case Request::TYPE_PRE_PREPARE:
@@ -166,6 +179,15 @@ int ConsensusManagerPBFT::ConsensusCommit(std::unique_ptr<Context> context,
       }
     }
   }
+  
+  /* 添加代码，控制pipeline
+      逻辑1：收到request之后，先不处理，放入额外的队列中，记录为waiting queue
+      逻辑2：根据设置的pipeline参数n，一次允许处理n个request
+      逻辑3：当有request处理完成之后（完成commit并执行），再从队列中取出一个request进行处理，始终保持当前正在处理的request数量不超过n
+      逻辑4：触发view change的时候，需要把waiting queue中所有的request加入到pending queue中，通过AddPendingRequest方法
+  */
+
+
   int ret = InternalConsensusCommit(std::move(context), std::move(request));
   if (config_.GetConfigData().enable_viewchange()) {
     if (ret == -4) {
@@ -202,26 +224,60 @@ int ConsensusManagerPBFT::InternalConsensusCommit(
       }
       return response_manager_->ProcessResponseMsg(std::move(context),
                                                    std::move(request));
-    case Request::TYPE_NEW_TXNS: {
-      LOG(ERROR) << "TESTATATSTAETSETA";
+    // case Request::TYPE_NEW_TXNS: {
+    //   LOG(ERROR) << "TESTATATSTAETSETA";
 
+    //   uint64_t proxy_id = request->proxy_id();
+    //   std::string hash = request->hash();
+    //   int ret = commitment_->ProcessNewRequest(std::move(context),
+    //                                            std::move(request));
+    //   if (ret == -3) {
+    //     LOG(ERROR) << "BAD RETURN";
+    //     std::pair<std::unique_ptr<Context>, std::unique_ptr<Request>>
+    //         request_complained;
+    //     {
+    //       std::lock_guard<std::mutex> lk(commitment_->rc_mutex_);
+
+    //       request_complained =
+    //           std::move(commitment_->request_complained_.front());
+    //       commitment_->request_complained_.pop();
+    //     }
+    //     AddComplainedRequest(std::move(request_complained.first),
+    //                          std::move(request_complained.second));
+    //     view_change_manager_->AddComplaintTimer(proxy_id, hash);
+    //   }
+    //   return ret;
+    // }
+    case Request::TYPE_NEW_TXNS: {
       uint64_t proxy_id = request->proxy_id();
       std::string hash = request->hash();
+      
+      // Pipeline控制：只在Primary节点生效
+      if (IsPrimary() && !CanProcessNewRequest()) {
+        AddToWaitingQueue(std::move(context), std::move(request));
+        return 0;  // 请求已加入等待队列，暂不处理
+      }
+      
       int ret = commitment_->ProcessNewRequest(std::move(context),
-                                               std::move(request));
+                                              std::move(request));
+      
+      // 如果成功开始处理，增加计数
+      if (ret == 0 && IsPrimary()) {
+        processing_count_.fetch_add(1, std::memory_order_relaxed);
+      }
+      
       if (ret == -3) {
         LOG(ERROR) << "BAD RETURN";
         std::pair<std::unique_ptr<Context>, std::unique_ptr<Request>>
             request_complained;
         {
           std::lock_guard<std::mutex> lk(commitment_->rc_mutex_);
-
           request_complained =
               std::move(commitment_->request_complained_.front());
           commitment_->request_complained_.pop();
         }
         AddComplainedRequest(std::move(request_complained.first),
-                             std::move(request_complained.second));
+                            std::move(request_complained.second));
         view_change_manager_->AddComplaintTimer(proxy_id, hash);
       }
       return ret;
@@ -263,6 +319,91 @@ void ConsensusManagerPBFT::SetupPerformanceDataFunc(
 void ConsensusManagerPBFT::SetPreVerifyFunc(
     std::function<bool(const Request&)> func) {
   commitment_->SetPreVerifyFunc(func);
+}
+
+// 待审查
+// 判断是否为Primary节点
+bool ConsensusManagerPBFT::IsPrimary() const {
+  return config_.GetSelfInfo().id() == system_info_->GetPrimaryId();
+}
+
+// 检查是否可以处理新请求
+bool ConsensusManagerPBFT::CanProcessNewRequest() {
+  return processing_count_.load(std::memory_order_relaxed) < max_pipeline_size_;
+}
+
+// 添加请求到等待队列
+void ConsensusManagerPBFT::AddToWaitingQueue(
+    std::unique_ptr<Context> context, 
+    std::unique_ptr<Request> request) {
+  std::lock_guard<std::mutex> lk(pipeline_mutex_);
+  waiting_queue_.push(std::make_pair(std::move(context), std::move(request)));
+  
+  LOG(INFO) << "Request added to waiting queue. Queue size: " 
+            << waiting_queue_.size()
+            << ", Processing: " << processing_count_.load();
+}
+
+// 尝试从等待队列处理请求
+void ConsensusManagerPBFT::TryProcessFromWaitingQueue() {
+  std::unique_ptr<Context> context;
+  std::unique_ptr<Request> request;
+  
+  {
+    std::lock_guard<std::mutex> lk(pipeline_mutex_);
+    if (waiting_queue_.empty() || !CanProcessNewRequest()) {
+      return;
+    }
+    
+    auto item = std::move(waiting_queue_.front());
+    waiting_queue_.pop();
+    context = std::move(item.first);
+    request = std::move(item.second);
+  }
+  
+  // 递增计数（在锁外进行）
+  processing_count_.fetch_add(1, std::memory_order_relaxed);
+  
+  // 处理请求（注意：这里直接调用commitment，跳过了TYPE_NEW_TXNS的pipeline检查）
+  int ret = commitment_->ProcessNewRequest(std::move(context), std::move(request));
+  
+  if (ret != 0) {
+    // 如果处理失败，需要减少计数
+    processing_count_.fetch_sub(1, std::memory_order_relaxed);
+    // 可能需要继续尝试处理下一个
+    TryProcessFromWaitingQueue();
+  }
+}
+
+// 请求执行完成的回调
+void ConsensusManagerPBFT::OnRequestExecuted(uint64_t seq) {
+  if (!IsPrimary()) {
+    return;
+  }
+  
+  int prev_count = processing_count_.fetch_sub(1, std::memory_order_relaxed);
+  
+  LOG(INFO) << "Request executed. Seq: " << seq 
+            << ", Processing count: " << (prev_count - 1);
+  
+  // 尝试处理等待队列中的请求
+  TryProcessFromWaitingQueue();
+}
+
+// 将等待队列中的所有请求移到pending队列
+void ConsensusManagerPBFT::MoveWaitingToPending() {
+  std::lock_guard<std::mutex> lk(pipeline_mutex_);
+  
+  while (!waiting_queue_.empty()) {
+    auto item = std::move(waiting_queue_.front());
+    waiting_queue_.pop();
+    AddPendingRequest(std::move(item.first), std::move(item.second));
+  }
+  
+  // 重置处理计数
+  processing_count_.store(0, std::memory_order_relaxed);
+  
+  LOG(INFO) << "Moved all waiting requests to pending queue due to view change";
 }
 
 }  // namespace resdb
