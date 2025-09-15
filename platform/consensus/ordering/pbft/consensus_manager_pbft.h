@@ -93,7 +93,7 @@ private:
   std::queue<std::pair<std::unique_ptr<Context>, std::unique_ptr<Request>>> 
       waiting_queue_;                    // 等待处理的请求队列
   std::atomic<int> processing_count_{0}; // 当前正在处理的请求数
-  int max_pipeline_size_{100};          // 最大并发处理数，默认100
+  int max_pipeline_size_{2};          // 最大并发处理数，默认100
   std::mutex pipeline_mutex_;           // 保护waiting_queue的互斥锁
   
   // Pipeline控制相关方法
@@ -105,5 +105,5 @@ private:
   void MoveWaitingToPending();
   bool IsPrimary() const;
 
-  };
+};
 }  // namespace resdb
