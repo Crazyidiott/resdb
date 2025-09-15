@@ -109,15 +109,44 @@ int PerformanceManager::StartEval() {
     return 0;
   }
   eval_started_ = true;
+
+  std::ofstream outfile("/home/ubuntu/output.txt");
+  if (!outfile)
+    LOG(ERROR) << "Failed to open output.txt";
+
+  const int request_rate = 300000;
+
+  using namespace std::chrono;
+  const auto time_between_requests = duration_cast<nanoseconds>(seconds(1)) / request_rate;
+  auto next_submit_time = time_point_cast<nanoseconds>(steady_clock::now());
+
   for (int i = 0; i < 600000; ++i) {
+    const auto now = time_point_cast<nanoseconds>(steady_clock::now());
+    if (now < next_submit_time) {
+      std::this_thread::sleep_for(next_submit_time - now);
+    }
+    // while(time_point_cast<nanoseconds>(steady_clock::now()) < next_submit_time);
+    next_submit_time = next_submit_time + time_between_requests;
+    
     std::unique_ptr<QueueItem> queue_item = std::make_unique<QueueItem>();
     queue_item->context = nullptr;
     queue_item->user_request = GenerateUserRequest();
+    queue_item->user_request->set_create_time(GetCurrentTime());
     batch_queue_.Push(std::move(queue_item));
     if (i == 20000) {
       eval_ready_promise_.set_value(true);
     }
+
+    if ((i+1) % request_rate == 0) {
+      LOG(ERROR) << (i+1)/request_rate << "s done. StartEval.";
+    }
+    
+    if (outfile) {
+      outfile << i << " "  << now.time_since_epoch().count() << std::endl;
+      outfile.flush();
+    }
   }
+  outfile.close();
   LOG(WARNING) << "start eval done";
   return 0;
 }
